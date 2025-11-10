@@ -1,127 +1,146 @@
 #[macro_use]
 extern crate rocket;
-use std::fmt;
+use std::fmt::{self};
 
-#[get("/")]
-fn index() -> String {
-    let mut calendar: Vec<Event> = Vec::new();
-    calendar.push(Event::new(
-        Date::new(2025, 11, 5),
-        Some(Time::new(9, 0)),
-        "Team retrospective",
-        Some("Conference Room A"),
-        Some("Discuss last sprint, blockers, and next steps."),
-    ));
-    calendar.push(Event::new(
-        Date::new(2025, 11, 12),
-        Some(Time::new(16, 0)),
-        "Doctor appointment",
-        Some("City Clinic"),
-        None,
-    ));
-    calendar.push(Event::with_title(
-        Date::new(2025, 12, 1),
-        None,
-        "Buy birthday gift",
-    ));
-
-    let mut text: String = String::from("Hello, world!\n");
-    for event in &calendar {
-        text += format!("{event:?} \n").as_str();
-    }
-    text
-}
+use chrono::prelude::*;
 
 #[launch]
 fn rocket() -> _ {
     rocket::build().mount("/", routes![index])
 }
 
-/// Simple year‑month‑day representation.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Date {
-    pub year: i32,
-    pub month: u8, // 1‑12
-    pub day: u8,   // 1‑31 (no validation here)
-}
-
-impl Date {
-    /// Create a new date.
-    pub fn new(year: i32, month: u8, day: u8) -> Self {
-        Self { year, month, day }
+#[get("/")]
+fn index() -> String {
+    let data = NaiveDate::from_ymd_opt(2025, 11, 16);
+    if let Some(date) = data {
+        println!("Date: {}", date);
     }
-}
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Time {
-    pub hour: u8,   // 0‑23
-    pub minute: u8, // 0‑59
-}
-
-impl Time {
-    /// Create a new time.
-    pub fn new(hour: u8, minute: u8) -> Self {
-        Self { hour, minute }
+    let local: DateTime<Local> = Local::now();
+    // only visible inside the CLI
+    println!("/************************/");
+    println!("{:?}", local.day());
+    println!("/************************/");
+    let mut calendar: Vec<Event> = vec![];
+    {
+        calendar.push(Event::new(
+            NaiveDate::from_ymd_opt(2025, 11, 5).unwrap(),
+            NaiveTime::from_hms_opt(9, 0, 0),
+            None,
+            None,
+            "Team retrospective",
+            Some("Conference Room A"),
+            Some("Discuss last sprint, blockers, and next steps."),
+        ));
+        calendar.push(Event::new(
+            NaiveDate::from_ymd_opt(2025, 11, 12).unwrap(),
+            None,
+            None,
+            None,
+            "Doctor appointment",
+            Some("City Clinic"),
+            None,
+        ));
+        calendar.push(Event::new(
+            NaiveDate::from_ymd_opt(2025, 12, 1).unwrap(),
+            None,
+            None,
+            None,
+            "Buy birthday gift",
+            None,
+            None,
+        ));
+        calendar.push(Event::new(
+        NaiveDate::from_ymd_opt(2025, 12, 1).unwrap(),
+        NaiveTime::from_hms_opt(14, 0, 0),
+        NaiveDate::from_ymd_opt(2025, 12, 1),
+        NaiveTime::from_hms_opt(15, 0, 0),
+        "Wawaw",
+        Some("Home uwu"),
+        Some("Super elorabitieave party yep yep\nAs suprise guest Katty Parry will do nothing!!\n\nBUH"),
+    ));
     }
+
+    let mut text = "".to_owned();
+    for event in &calendar {
+        text.push_str(format!("{event} \n").as_str());
+        text += "\n\n";
+    }
+    text += local.to_string().as_str();
+    text
 }
 
 /// Calendar event with optional fields.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Event {
-    pub date: Date,
-    pub time: Option<Time>,
+    pub start_date: NaiveDate,
+    pub start_time: Option<NaiveTime>,
+    pub end_date: Option<NaiveDate>,
+    pub end_time: Option<NaiveTime>,
     pub title: String,
     pub place: Option<String>,
     pub description: Option<String>,
 }
 
 impl Event {
-    /// Build a new event. `place` and `description` can be omitted (`None`).
     pub fn new<T: Into<String>>(
-        date: Date,
-        time: Option<Time>,
+        start_date: NaiveDate,
+        start_time: Option<NaiveTime>,
+        end_date: Option<NaiveDate>,
+        end_time: Option<NaiveTime>,
         title: T,
         place: Option<T>,
         description: Option<T>,
     ) -> Self {
         Self {
-            date,
-            time,
+            start_date,
+            start_time,
+            end_date,
+            end_time,
             title: title.into(),
             place: place.map(Into::into),
             description: description.map(Into::into),
         }
-    }
-
-    /// Convenience shortcut when you only have a title.
-    pub fn with_title(date: Date, time: Option<Time>, title: impl Into<String>) -> Self {
-        Self::new(date, time, title, None, None)
     }
 }
 
 /* Pretty‑print an event --------------------------------------------------- */
 impl fmt::Display for Event {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // Date part
+        writeln!(f, "🐱 {}", self.title)?;
+        let data = &self.start_date;
         write!(
             f,
-            "{}-{:02}-{:02}: {}",
-            self.date.year, self.date.month, self.date.day, self.title
+            "⏲️ {}-{:02}-{:02}",
+            data.year(),
+            data.month(),
+            data.day()
         )?;
 
-        // Optional time
-        if let Some(time) = &self.time {
-            write!(f, " @ {:?}", time)?;
+        if let Some(time) = &self.start_time {
+            write!(f, " {:02}:{:02}", time.hour(), time.minute())?;
         }
 
-        // Optional place
+        if self.end_date.is_some() || self.end_time.is_some() {
+            write!(f, " - ")?;
+
+            if let Some(date) = &self.end_date {
+                write!(f, "{}-{:02}-{:02}", date.year(), date.month(), date.day(),)?;
+            }
+
+            if let Some(time) = &self.end_time {
+                write!(f, " {:02}:{:02}", time.hour(), time.minute())?;
+            }
+        }
+        writeln!(f)?;
+
         if let Some(place) = &self.place {
-            write!(f, " @ {}", place)?;
+            writeln!(f, "🏡 {}", place)?;
         }
 
-        // Optional description (on a new line for readability)
         if let Some(desc) = &self.description {
-            write!(f, "\n    {}", desc)?;
+            let desc = desc.trim().replace("\n", "\n| ");
+            writeln!(f, "| {}", desc)?;
         }
         Ok(())
     }
